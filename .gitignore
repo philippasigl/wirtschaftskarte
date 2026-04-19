@@ -1,0 +1,14 @@
+# Ignore everything
+*
+
+# Except map folder
+!map/
+!map/**
+
+# But ignore these in map/
+map/*.png
+map/*.csv
+map/uploads/
+
+# And keep this file
+!.gitignore

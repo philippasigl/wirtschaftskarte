@@ -1,0 +1,4 @@
+# One card filename per line. Lines starting with # are ignored.
+industrie_card.md
+loehne_card.md
+cost_of_living_card.md
