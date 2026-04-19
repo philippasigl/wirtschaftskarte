@@ -10,5 +10,6 @@ map/*.png
 map/*.csv
 map/uploads/
 
-# And keep this file
+# And keep these files
 !.gitignore
+!.nojekyll
