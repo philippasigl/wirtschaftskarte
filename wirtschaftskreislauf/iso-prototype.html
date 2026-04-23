@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<title>Wirtschaftskreislauf · ISO Prototyp (SimCity-Stil)</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #3a4a24;
+    --outline:   #0b0b0b;
+    --cream:     #f6efd6;
+    --gold:      #f2cc4c;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--cream);
+    font-family: 'VT323', monospace;
+    image-rendering: pixelated;
+  }
+  .topbar {
+    display: flex; align-items: baseline; gap: 20px;
+    padding: 18px 32px 12px;
+    background: #2a3a18;
+    border-bottom: 3px solid var(--outline);
+  }
+  .logo {
+    font-size: 32px; letter-spacing: 0.04em;
+    color: var(--gold);
+    text-shadow: 2px 2px 0 var(--outline);
+  }
+  .sub {
+    font-size: 18px; letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--cream);
+  }
+  .stage { padding: 16px 32px; }
+  svg { display: block; width: 100%; max-width: 1200px; margin: 0 auto; shape-rendering: crispEdges; }
+
+  .face  { stroke: var(--outline); stroke-width: 1.8; stroke-linejoin: miter; }
+  .edge  { stroke: var(--outline); stroke-width: 1; fill: none; }
+
+  .node-label {
+    font-size: 24px;
+    fill: var(--cream);
+    paint-order: stroke;
+    stroke: var(--outline); stroke-width: 4;
+    letter-spacing: 0.04em;
+  }
+  .stratum-label {
+    font-size: 18px;
+    fill: var(--cream);
+    paint-order: stroke;
+    stroke: var(--outline); stroke-width: 3;
+    letter-spacing: 0.04em;
+  }
+  .stratum-value {
+    font-size: 15px;
+    fill: var(--gold);
+    paint-order: stroke;
+    stroke: var(--outline); stroke-width: 3;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .pipe-label {
+    font-size: 26px;
+    fill: var(--cream);
+    paint-order: stroke;
+    stroke: var(--outline); stroke-width: 4;
+    letter-spacing: 0.04em;
+  }
+  .pipe-value {
+    font-size: 18px;
+    fill: var(--gold);
+    paint-order: stroke;
+    stroke: var(--outline); stroke-width: 3;
+    letter-spacing: 0.06em;
+  }
+  .leader {
+    stroke: var(--cream);
+    stroke-width: 1.2;
+    fill: none;
+    stroke-dasharray: 3 3;
+    opacity: 0.8;
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="logo">WIRTSCHAFTSKREISLAUF</div>
+  <div class="sub">· Stage 0 · Wealth Tower · Konsum-Pipe</div>
+</header>
+
+<main class="stage">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+
+    <!-- ===============================================================
+         PATTERNS — jede Fläche bekommt eine 8-bit-Pixel-Textur.
+         Muster tile-en in Screen-Space, das passt in iso gut.
+         =============================================================== -->
+    <defs>
+      <!-- GRASS (Boden) -->
+      <pattern id="grass" width="8" height="8" patternUnits="userSpaceOnUse">
+        <rect width="8" height="8" fill="#4a6a28"/>
+        <rect x="1" y="2" width="1" height="1" fill="#6c8a3e"/>
+        <rect x="5" y="6" width="1" height="1" fill="#7a9a4a"/>
+        <rect x="3" y="5" width="1" height="1" fill="#3a5a1e"/>
+        <rect x="6" y="1" width="1" height="1" fill="#5a7a32"/>
+      </pattern>
+
+      <!-- ROAD (Grau, gelbe Mittellinie) -->
+      <pattern id="road" width="16" height="8" patternUnits="userSpaceOnUse">
+        <rect width="16" height="8" fill="#5a5a5a"/>
+        <rect x="0" y="3" width="6" height="2" fill="#e8c030"/>
+        <rect x="0" y="0" width="16" height="1" fill="#3a3a3a"/>
+        <rect x="0" y="7" width="16" height="1" fill="#3a3a3a"/>
+      </pattern>
+
+      <!-- UNTERE 50 % — Schiefer-Wand, gleiches Backstein-Motiv auf front & right,
+                        nur andere Farbtöne (Schatten). Top hat Dach-Textur. -->
+      <pattern id="low-top" width="8" height="8" patternUnits="userSpaceOnUse">
+        <rect width="8" height="8" fill="#8692a0"/>
+        <rect x="0" y="0" width="8" height="1" fill="#596370"/>
+        <rect x="0" y="4" width="8" height="1" fill="#596370"/>
+        <rect x="4" y="0" width="1" height="4" fill="#596370"/>
+        <rect x="0" y="4" width="1" height="4" fill="#596370"/>
+      </pattern>
+      <pattern id="low-front" width="12" height="8" patternUnits="userSpaceOnUse">
+        <rect width="12" height="8" fill="#6a7684"/>
+        <rect x="0" y="0" width="12" height="1" fill="#3a454f"/>
+        <rect x="0" y="4" width="12" height="1" fill="#3a454f"/>
+        <rect x="0" y="0" width="1" height="8" fill="#3a454f"/>
+        <rect x="6" y="0" width="1" height="4" fill="#3a454f"/>
+        <rect x="0" y="4" width="1" height="4" fill="#3a454f"/>
+      </pattern>
+      <pattern id="low-right" width="12" height="8" patternUnits="userSpaceOnUse">
+        <rect width="12" height="8" fill="#495462"/>
+        <rect x="0" y="0" width="12" height="1" fill="#2a333c"/>
+        <rect x="0" y="4" width="12" height="1" fill="#2a333c"/>
+        <rect x="0" y="0" width="1" height="8" fill="#2a333c"/>
+        <rect x="6" y="0" width="1" height="4" fill="#2a333c"/>
+        <rect x="0" y="4" width="1" height="4" fill="#2a333c"/>
+      </pattern>
+
+      <!-- 50 – 90 % — Lehmziegel mit Fensterreihen, konsistent front & right -->
+      <pattern id="mid-top" width="10" height="10" patternUnits="userSpaceOnUse">
+        <rect width="10" height="10" fill="#b07744"/>
+        <rect x="0" y="0" width="10" height="1" fill="#6d441c"/>
+        <rect x="0" y="0" width="1" height="10" fill="#6d441c"/>
+        <rect x="5" y="5" width="1" height="1" fill="#c8945a"/>
+      </pattern>
+      <pattern id="mid-front" width="12" height="14" patternUnits="userSpaceOnUse">
+        <rect width="12" height="14" fill="#8a5a2e"/>
+        <rect x="0" y="0" width="12" height="1" fill="#4a2e12"/>
+        <rect x="0" y="7" width="12" height="1" fill="#4a2e12"/>
+        <rect x="2" y="2" width="3" height="4" fill="#e8c45a"/>
+        <rect x="7" y="2" width="3" height="4" fill="#e8c45a"/>
+        <rect x="2" y="9" width="3" height="4" fill="#e8c45a"/>
+        <rect x="7" y="9" width="3" height="4" fill="#e8c45a"/>
+      </pattern>
+      <pattern id="mid-right" width="12" height="14" patternUnits="userSpaceOnUse">
+        <rect width="12" height="14" fill="#5e3d1e"/>
+        <rect x="0" y="0" width="12" height="1" fill="#2e1d0a"/>
+        <rect x="0" y="7" width="12" height="1" fill="#2e1d0a"/>
+        <rect x="2" y="2" width="3" height="4" fill="#a07a38"/>
+        <rect x="7" y="2" width="3" height="4" fill="#a07a38"/>
+        <rect x="2" y="9" width="3" height="4" fill="#a07a38"/>
+        <rect x="7" y="9" width="3" height="4" fill="#a07a38"/>
+      </pattern>
+
+      <!-- OBERE 10 % — Gold-Fassade, dichtere Fensterreihen konsistent -->
+      <pattern id="high-top" width="8" height="8" patternUnits="userSpaceOnUse">
+        <rect width="8" height="8" fill="#f2cc4c"/>
+        <rect x="0" y="0" width="8" height="1" fill="#a07612"/>
+        <rect x="0" y="0" width="1" height="8" fill="#a07612"/>
+        <rect x="3" y="3" width="2" height="2" fill="#fde884"/>
+      </pattern>
+      <pattern id="high-front" width="10" height="14" patternUnits="userSpaceOnUse">
+        <rect width="10" height="14" fill="#c99c20"/>
+        <rect x="0" y="0" width="10" height="1" fill="#604008"/>
+        <rect x="0" y="7" width="10" height="1" fill="#604008"/>
+        <rect x="1" y="2" width="3" height="4" fill="#fde884"/>
+        <rect x="6" y="2" width="3" height="4" fill="#fde884"/>
+        <rect x="1" y="9" width="3" height="4" fill="#fde884"/>
+        <rect x="6" y="9" width="3" height="4" fill="#fde884"/>
+      </pattern>
+      <pattern id="high-right" width="10" height="14" patternUnits="userSpaceOnUse">
+        <rect width="10" height="14" fill="#907012"/>
+        <rect x="0" y="0" width="10" height="1" fill="#402a04"/>
+        <rect x="0" y="7" width="10" height="1" fill="#402a04"/>
+        <rect x="1" y="2" width="3" height="4" fill="#c99c20"/>
+        <rect x="6" y="2" width="3" height="4" fill="#c99c20"/>
+        <rect x="1" y="9" width="3" height="4" fill="#c99c20"/>
+        <rect x="6" y="9" width="3" height="4" fill="#c99c20"/>
+      </pattern>
+
+      <!-- UNTERNEHMEN — Backsteinfabrik, gleiche Fenster-Muster auf beiden Wänden -->
+      <pattern id="unt-top" width="10" height="6" patternUnits="userSpaceOnUse">
+        <rect width="10" height="6" fill="#8a3a24"/>
+        <rect x="0" y="0" width="10" height="1" fill="#5a2414"/>
+        <rect x="0" y="3" width="10" height="1" fill="#5a2414"/>
+        <rect x="5" y="0" width="1" height="6" fill="#5a2414"/>
+      </pattern>
+      <pattern id="unt-front" width="12" height="12" patternUnits="userSpaceOnUse">
+        <rect width="12" height="12" fill="#a84828"/>
+        <rect x="0" y="0" width="12" height="1" fill="#6a2814"/>
+        <rect x="0" y="6" width="12" height="1" fill="#6a2814"/>
+        <rect x="2" y="2" width="3" height="3" fill="#e8c45a"/>
+        <rect x="7" y="2" width="3" height="3" fill="#e8c45a"/>
+        <rect x="2" y="8" width="3" height="3" fill="#e8c45a"/>
+        <rect x="7" y="8" width="3" height="3" fill="#e8c45a"/>
+      </pattern>
+      <pattern id="unt-right" width="12" height="12" patternUnits="userSpaceOnUse">
+        <rect width="12" height="12" fill="#7a321c"/>
+        <rect x="0" y="0" width="12" height="1" fill="#4a1a0a"/>
+        <rect x="0" y="6" width="12" height="1" fill="#4a1a0a"/>
+        <rect x="2" y="2" width="3" height="3" fill="#a67038"/>
+        <rect x="7" y="2" width="3" height="3" fill="#a67038"/>
+        <rect x="2" y="8" width="3" height="3" fill="#a67038"/>
+        <rect x="7" y="8" width="3" height="3" fill="#a67038"/>
+      </pattern>
+
+      <!-- PIPE — Messing-Rohr mit Nieten, konsistent über alle Flächen -->
+      <pattern id="pipe-top" width="8" height="8" patternUnits="userSpaceOnUse">
+        <rect width="8" height="8" fill="#d9b155"/>
+        <rect x="0" y="0" width="8" height="1" fill="#7d5e20"/>
+        <rect x="4" y="4" width="1" height="1" fill="#fdd878"/>
+      </pattern>
+      <pattern id="pipe-front" width="10" height="10" patternUnits="userSpaceOnUse">
+        <rect width="10" height="10" fill="#a98236"/>
+        <rect x="0" y="0" width="10" height="1" fill="#7d5e20"/>
+        <rect x="0" y="4" width="10" height="1" fill="#7d5e20"/>
+        <rect x="2" y="2" width="1" height="1" fill="#d9b155"/>
+        <rect x="7" y="2" width="1" height="1" fill="#d9b155"/>
+        <rect x="2" y="7" width="1" height="1" fill="#d9b155"/>
+        <rect x="7" y="7" width="1" height="1" fill="#d9b155"/>
+      </pattern>
+      <pattern id="pipe-right" width="10" height="10" patternUnits="userSpaceOnUse">
+        <rect width="10" height="10" fill="#7d5e20"/>
+        <rect x="0" y="0" width="10" height="1" fill="#4a360a"/>
+        <rect x="0" y="4" width="10" height="1" fill="#4a360a"/>
+        <rect x="2" y="2" width="1" height="1" fill="#a98236"/>
+        <rect x="7" y="2" width="1" height="1" fill="#a98236"/>
+        <rect x="2" y="7" width="1" height="1" fill="#a98236"/>
+        <rect x="7" y="7" width="1" height="1" fill="#a98236"/>
+      </pattern>
+    </defs>
+
+    <g id="diagram"></g>
+  </svg>
+</main>
+
+<script>
+(() => {
+  'use strict';
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+
+  const C30 = Math.cos(Math.PI / 6);
+  const S30 = Math.sin(Math.PI / 6);
+  const ORIGIN = { x: 580, y: 470 };
+  const iso = (x, y, z) => ({
+    sx: ORIGIN.x + C30 * (x - z),
+    sy: ORIGIN.y + S30 * (x + z) - y,
+  });
+  const P = (x, y, z) => {
+    const p = iso(x, y, z);
+    return `${p.sx.toFixed(1)} ${p.sy.toFixed(1)}`;
+  };
+
+  const g = document.getElementById('diagram');
+
+  /* Prisma mit Pattern-Fills je Face */
+  function drawPrism(x, y, z, w, h, d, kind, opts = {}) {
+    const wrap = document.createElementNS(SVG_NS, 'g');
+    g.appendChild(wrap);
+    const FBL = [x,y,z], FBR = [x+w,y,z], FTR = [x+w,y+h,z], FTL = [x,y+h,z];
+    const BBR = [x+w,y,z+d], BTR = [x+w,y+h,z+d], BTL = [x,y+h,z+d];
+    const mk = (pts, face) => {
+      const poly = document.createElementNS(SVG_NS, 'polygon');
+      poly.setAttribute('class', 'face');
+      poly.setAttribute('points', pts.map(p => P(...p)).join(' '));
+      poly.setAttribute('fill', `url(#${kind}-${face})`);
+      wrap.appendChild(poly);
+    };
+    if (!opts.skipTop) mk([FTL, FTR, BTR, BTL], 'top');
+    mk([FBL, FBR, FTR, FTL], 'front');
+    mk([FBR, BBR, BTR, FTR], 'right');
+    return wrap;
+  }
+
+  /* GROUND · Grass-Fläche mit Road-Streifen zwischen UNT und HH */
+  (() => {
+    const gx0 = -560, gx1 = 360, gz0 = -150, gz1 = 320;
+    const gpoly = document.createElementNS(SVG_NS, 'polygon');
+    gpoly.setAttribute('class', 'face');
+    gpoly.setAttribute('points', [
+      [gx0,0,gz0],[gx1,0,gz0],[gx1,0,gz1],[gx0,0,gz1]
+    ].map(c => P(...c)).join(' '));
+    gpoly.setAttribute('fill', 'url(#grass)');
+    g.appendChild(gpoly);
+
+    // Road zwischen UNT und HH-Tower
+    const roadZ0 = 55, roadZ1 = 125, roadX0 = -280, roadX1 = -125;
+    const rpoly = document.createElementNS(SVG_NS, 'polygon');
+    rpoly.setAttribute('class', 'face');
+    rpoly.setAttribute('points', [
+      [roadX0,0,roadZ0],[roadX1,0,roadZ0],[roadX1,0,roadZ1],[roadX0,0,roadZ1]
+    ].map(c => P(...c)).join(' '));
+    rpoly.setAttribute('fill', 'url(#road)');
+    g.appendChild(rpoly);
+  })();
+
+  /* WEALTH TOWER
+     Bottom-Block bewusst dünn (niedriger Vermögensanteil sichtbar machen),
+     aber min 12 damit es kein Pixel-Streifen wird.
+     Middle leicht überproportional (min 30). Top dominiert (keine Deckelung). */
+  const W_UNIT = 5, H_UNIT = 30, HH_D = 160;
+  const strata = [
+    { label: 'Untere 50 %', pop: 50, wealth: 3,  wPerCapita: 3/50,  kind: 'low',  minH: 12 },
+    { label: '50 – 90 %',   pop: 40, wealth: 42, wPerCapita: 42/40, kind: 'mid',  minH: 30 },
+    { label: 'Obere 10 %',  pop: 10, wealth: 55, wPerCapita: 55/10, kind: 'high', minH: 60 },
+  ];
+  let yStack = 0;
+  const strataBoxes = strata.map(s => {
+    const w = s.pop * W_UNIT;
+    const h = Math.max(s.minH, s.wPerCapita * H_UNIT);
+    const b = { x: -w/2, y: yStack, z: 0, w, h, d: HH_D, ...s };
+    yStack += h; return b;
+  });
+  strataBoxes.forEach(b => drawPrism(b.x, b.y, b.z, b.w, b.h, b.d, b.kind));
+
+  /* KONSUM-PIPE — VOR UNT zeichnen (Pipe ist „hinter" UNT in iso z-order) */
+  const UNT = { x: -430, y: 0, z: 30, w: 150, h: 60, d: 100 };
+  const pipeConfig = (() => {
+    const pipeH = 22, pipeD = 44, pipeY = 8;
+    const pipeZ = UNT.z + (UNT.d - pipeD) / 2;
+    const pipeX = UNT.x + UNT.w;
+    const bottom = strataBoxes[0];
+    const pipeW = bottom.x - pipeX;
+    return { pipeX, pipeY, pipeZ, pipeW, pipeH, pipeD };
+  })();
+  drawPrism(pipeConfig.pipeX, pipeConfig.pipeY, pipeConfig.pipeZ,
+            pipeConfig.pipeW, pipeConfig.pipeH, pipeConfig.pipeD, 'pipe');
+
+  /* UNTERNEHMEN — zuletzt gezeichnet (frontmost) */
+  drawPrism(UNT.x, UNT.y, UNT.z, UNT.w, UNT.h, UNT.d, 'unt');
+
+  /* ---- Jetzt alle Labels (immer on top) ---- */
+  // Schicht-Labels am Wealth-Tower
+  strataBoxes.forEach(b => {
+    const a = iso(b.x + b.w, b.y + b.h, b.z + b.d * 0.5);
+    const e = { sx: a.sx + 140, sy: a.sy };
+    const line = document.createElementNS(SVG_NS, 'path');
+    line.setAttribute('class', 'leader');
+    line.setAttribute('d', `M ${a.sx.toFixed(1)} ${a.sy.toFixed(1)} L ${e.sx.toFixed(1)} ${e.sy.toFixed(1)}`);
+    g.appendChild(line);
+
+    const t = document.createElementNS(SVG_NS, 'text');
+    t.setAttribute('class', 'stratum-label');
+    t.setAttribute('x', (e.sx + 6).toFixed(1));
+    t.setAttribute('y', (e.sy - 2).toFixed(1));
+    t.textContent = b.label;
+    g.appendChild(t);
+
+    const t2 = document.createElementNS(SVG_NS, 'text');
+    t2.setAttribute('class', 'stratum-value');
+    t2.setAttribute('x', (e.sx + 6).toFixed(1));
+    t2.setAttribute('y', (e.sy + 14).toFixed(1));
+    t2.textContent = `${b.wealth}% Vermögen · ${b.pop}% HH`;
+    g.appendChild(t2);
+  });
+
+  // Haushalte-Label unter dem Tower
+  (() => {
+    const base = strataBoxes[0];
+    const p = iso(base.x + base.w * 0.5, 0, base.z + base.d + 60);
+    const t = document.createElementNS(SVG_NS, 'text');
+    t.setAttribute('class', 'node-label');
+    t.setAttribute('x', p.sx.toFixed(1));
+    t.setAttribute('y', p.sy.toFixed(1));
+    t.setAttribute('text-anchor', 'middle');
+    t.textContent = 'HAUSHALTE';
+    g.appendChild(t);
+  })();
+
+  // UNT-Label
+  (() => {
+    const p = iso(UNT.x + UNT.w * 0.5, UNT.y + UNT.h + 18, UNT.z);
+    const t = document.createElementNS(SVG_NS, 'text');
+    t.setAttribute('class', 'node-label');
+    t.setAttribute('x', p.sx.toFixed(1));
+    t.setAttribute('y', p.sy.toFixed(1));
+    t.setAttribute('text-anchor', 'middle');
+    t.textContent = 'UNTERNEHMEN';
+    g.appendChild(t);
+  })();
+
+  // Konsum-Label
+  (() => {
+    const midX = pipeConfig.pipeX + pipeConfig.pipeW / 2;
+    const lp = iso(midX, pipeConfig.pipeY + pipeConfig.pipeH + 32, pipeConfig.pipeZ + pipeConfig.pipeD / 2);
+    const t = document.createElementNS(SVG_NS, 'text');
+    t.setAttribute('class', 'pipe-label');
+    t.setAttribute('x', lp.sx.toFixed(1));
+    t.setAttribute('y', lp.sy.toFixed(1));
+    t.setAttribute('text-anchor', 'middle');
+    t.textContent = 'KONSUM';
+    g.appendChild(t);
+
+    const t2 = document.createElementNS(SVG_NS, 'text');
+    t2.setAttribute('class', 'pipe-value');
+    t2.setAttribute('x', lp.sx.toFixed(1));
+    t2.setAttribute('y', (lp.sy + 20).toFixed(1));
+    t2.setAttribute('text-anchor', 'middle');
+    t2.textContent = '3.007 MRD. €';
+    g.appendChild(t2);
+  })();
+})();
+</script>
+
+</body>
+</html>

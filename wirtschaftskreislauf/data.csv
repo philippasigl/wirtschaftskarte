@@ -1,0 +1,33 @@
+Node;Von;Zu;Label;Indikator;Einheit;Wert;Quelle;Kommentar;
+;Haushalte;Unternehmen;Konsum;Individualkonsum;EUR Mrd.;2.311;https://www-genesis.destatis.de/datenbank/online/statistic/81000/table/81000-0019/search/s/aW1wb3J0;;check
+;Erwerbstätige;Staat;Steuer;Lohnsteuer;EUR Mrd.;263;https://www.bundesfinanzministerium.de/Content/DE/Standardartikel/Themen/Steuern/Steuerschaetzungen_und_Steuereinnahmen/2026-01-29-steuereinn-4-quartal-gesamt-2025.pdf?__blob=publicationFile&v=3;;
+;Erwerbstätige;Staat;Steuer;Veranlagte Est;EUR Mrd.;78;https://www.bundesfinanzministerium.de/Content/DE/Standardartikel/Themen/Steuern/Steuerschaetzungen_und_Steuereinnahmen/2026-01-29-steuereinn-4-quartal-gesamt-2025.pdf?__blob=publicationFile&v=3;;
+;Eigentümer;Staat;Steuer;Nicht veranlagte Steuern auf Ertrag;EUR Mrd.;31;https://www.bundesfinanzministerium.de/Content/DE/Standardartikel/Themen/Steuern/Steuerschaetzungen_und_Steuereinnahmen/2026-01-29-steuereinn-4-quartal-gesamt-2025.pdf?__blob=publicationFile&v=3;Vor allem Kapitalertragssteuern auf Dividenden;
+;Eigentümer;Staat;Steuer;Abgeltungssteuer;EUR Mrd.;25;https://www.bundesfinanzministerium.de/Content/DE/Standardartikel/Themen/Steuern/Steuerschaetzungen_und_Steuereinnahmen/2026-01-29-steuereinn-4-quartal-gesamt-2025.pdf?__blob=publicationFile&v=3;;
+;Unternehmen;Staat;Steuer;Körperschaftssteuer;EUR Mrd.;39;https://www.bundesfinanzministerium.de/Content/DE/Standardartikel/Themen/Steuern/Steuerschaetzungen_und_Steuereinnahmen/2026-01-29-steuereinn-4-quartal-gesamt-2025.pdf?__blob=publicationFile&v=3;;
+;Haushalte;Staat;Steuer;Umsatzsteuer;EUR Mrd.;236;https://www.bundesfinanzministerium.de/Content/DE/Standardartikel/Themen/Steuern/Steuerschaetzungen_und_Steuereinnahmen/2026-01-29-steuereinn-4-quartal-gesamt-2025.pdf?__blob=publicationFile&v=3;;
+;Haushalte;Staat;Steuer;Einfuhrumsatzsteuer;EUR Mrd.;74;https://www.bundesfinanzministerium.de/Content/DE/Standardartikel/Themen/Steuern/Steuerschaetzungen_und_Steuereinnahmen/2026-01-29-steuereinn-4-quartal-gesamt-2025.pdf?__blob=publicationFile&v=3;;
+;Haushalte;Staat;Steuer;Soli;EUR Mrd.;13;https://www.bundesfinanzministerium.de/Content/DE/Standardartikel/Themen/Steuern/Steuerschaetzungen_und_Steuereinnahmen/2026-01-29-steuereinn-4-quartal-gesamt-2025.pdf?__blob=publicationFile&v=3;;
+;Haushalte;Staat;Abgaben;Sozialbeiträge;EUR Mrd.;741;Destatis, 81000-0031;;
+;Staat;Erwerbstätige;Löhne;Arbeitnehmerentgelt des Staates;EUR Mrd.;384;Destatis, 81000-0031;;
+;Staat;Haushalte;Staatl. Leistung;Monetäre Sozialleistungen;EUR Mrd. ;749;Destatis,  81000-0031;;
+;Staat;Öffentliche Dienstleister;Sachleistungen;Soziale Sachleistungen;EUR Mrd. ;415;Destatis,  81000-0031;TBD;
+;Unternehmen;Eigentümer;Ausschüttung;Dividenden;EUR Mrd. ;27;https://www.ey.com/de_de/newsroom/2025/08/ey-wem-gehoert-der-dax-2025;;
+;Unternehmen;Ausland;Ausschüttung;Dividenden;EUR Mrd. ;27;https://www.ey.com/de_de/newsroom/2025/08/ey-wem-gehoert-der-dax-2025;;
+;Staat;Unternehmen;Investition;Bruttoinvestitionen des Staates;EUR Mrd. ;125;Destatis, 81000-0031;Bruttoinvestitionen Staat - Zuweisungen für staatl. Forschung;
+;Staat;Öffentliche Dienstleister;Staatl. Leistung;Zuweisungen,Zuschüsse aus d.Inland v.öff. Bereich an öffentliche Forschungseinrichtungen;EUR Mrd. ;20;Destatis, 21811-0010;;
+;Unternehmen;Erwerbstätige;Löhne;Arbeitnehmerentgelt;EUR Mrd. ;1.883;Destatis, 81000-0007;2093 - geschätzte 210 für öffentliche Löhne;
+Haushalte;;;;total financial assets;EUR Mio.;9503740;QSA.Q.N.DE.W0.S14.S1.N.A.LE.F._Z._Z.XDC._T.S.V.N._T;;
+Öffentliche Institutionen;;;;Total financial assets of Non profit institutions serving households, Germany, Quarterly;Mio.;393293;QSA.Q.N.DE.W0.S15.S1.N.A.LE.F._Z._Z.XDC._T.S.V.N._T;;
+;Unternehmen;Unternehmen;Gross capital formation of Non financial corporations, Germany;;EUR Mrd. ;537,5;https://data.ecb.europa.eu/data/datasets/QSA/QSA.Q.N.DE.W0.S11.S1.N.D.P5._Z._Z._Z.XDC._T.S.V.N._T;;
+Banken;;;;;EUR Mio.;13200010;QSA.Q.N.DE.W0.S12K.S1.N.A.LE.F._Z._Z.XDC._T.S.V.N._T;;
+Unternehmen;;;;;EUR Mio.;9029224;QSA.Q.N.DE.W0.S11.S1.N.A.LE.F._Z._Z.XDC._T.S.V.N._T;;
+Staat;;;;;EUR Mio.;1965169;QSA.Q.N.DE.W0.S13.S1.N.A.LE.F._Z._Z.XDC._T.S.V.N._T;;
+;Unternehmen;Ausland;Exporte;Exporte;EUR Mrd.;1807;https://www-genesis.destatis.de/datenbank/online/statistic/81000/table/81000-0019/search/s/aW1wb3J0;;check
+;Ausland;Unternehmen;Importe;Importe;EUR Mrd.;1702;https://www-genesis.destatis.de/datenbank/online/statistic/81000/table/81000-0019/search/s/aW1wb3J0;;check
+;Unternehmen;Ausland;Direktinvestition; Inländische Nettokapitalanlagen im Ausland / Direktinvestitionen / Alle Länder;EUR Mrd.;97,53;BBFBOPV.M.N.DE.W1.S1.S1.T.A.FA.D.F._Z.EUR._T._X.N.ALL;;
+;Unternehmen;Ausland;Finanzanlagen; Inländische Nettokapitalanlagen im Ausland / Direktinvestitionen / Alle Länder;EUR Mrd.;281,12;BBFBOPV.M.N.DE.W1.S1.S1.T.A.FA.P.F._Z.EUR._T.M.N.ALL;;
+;Ausland;Unternehmen;Direktinvestition;Kapitalbilanz / Ausländische Nettokapitalanlagen im Inland / Direktinvestitionen / Alle Länder;EUR Mrd.;86,14;BBFBOPV.M.N.DE.W1.S1.S1.T.L.FA.D.F._Z.EUR._T._X.N.ALL;;
+;Ausland;Unternehmen;Finanzanlagen;Kapitalbilanz / Ausländische Nettokapitalanlagen im Inland / Wertpapieranlagen / Alle Länder;EUR Mrd.;229,44;BBFBOPV.M.N.DE.W1.S1.S1.T.L.FA.P.F._Z.EUR._T.M.N.ALL;;
+;Öffentliche Dienstleister;Haushalte;Löhne;Geschätzt;EUR Mrd.;210;;;
+;Staat;Unternehmen;Subventionen;;EUR Mrd.;36,5;https://www-genesis.destatis.de/datenbank/online/statistic/81000/table/81000-0405/search/s/c3VidmVudGlvbmVu;;

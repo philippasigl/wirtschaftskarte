@@ -1,0 +1,1054 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<title>Wirtschaftskreislauf · Editorial · Draft</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=21">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="logo">Wirtschaftskreislauf</div>
+  <div class="sub">Editorial · Draft · Daten 2025 (Destatis, BMF)</div>
+  <label class="toggle-switch">
+    <input type="checkbox" id="annotations-toggle" checked>
+    <span class="toggle-slider"></span>
+    <span class="toggle-label">Anmerkungen</span>
+  </label>
+</header>
+
+<main class="stage">
+  <div class="diagram-wrap">
+    <svg class="diagram" viewBox="-50 0 1750 1050" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <marker id="annotation-arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M 0 0 L 6 3 L 0 6 Z" fill="#7a6f63" />
+        </marker>
+      </defs>
+      <g id="pipes"></g>
+      <g id="container"></g>
+      <g id="nodes"></g>
+      <g id="flares"></g>
+      <g id="pipe-labels"></g>
+      <g id="annotations"></g>
+      <g id="footer"></g>
+    </svg>
+    <div class="annotation-popup" id="annotation-popup">
+      <button class="annotation-popup-close" id="popup-close">&times;</button>
+      <div class="annotation-popup-header">
+        <div class="annotation-popup-number" id="popup-number"></div>
+        <h3 class="annotation-popup-title" id="popup-title"></h3>
+      </div>
+      <p class="annotation-popup-text" id="popup-text"></p>
+      <div class="annotation-popup-images" id="popup-images"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+/* =========================================================================
+   WIRTSCHAFTSKREISLAUF · Engine · v2
+   -------------------------------------------------------------------------
+   Single source of truth: `nodes` + `flows` + `csvRows`.
+   Die 5 Kernflüsse (tier: 'core') halten den zentralen Kreislauf:
+     Markt:  konsum, lohn-markt
+     Staat:  steuer-erwerbstaetige, steuer-haushalte, lohn-staat, transfer
+   ========================================================================= */
+
+(() => {
+  'use strict';
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+
+  /* ==============================================================
+     CONFIG · Knoten
+     Box-Größen für Haushalte/Erwerbstätige/Eigentümer in etwa
+     proportional zu Bevölkerung (83,5 / 46 / 41,75 Mio).
+     ============================================================== */
+  // Knotengröße ∝ √(Financial Assets) · Daten: ECB QSA
+  // Haushalte: 9.504 Mrd €, Unternehmen: 9.029 Mrd €, Staat: 1.965 Mrd €, Öff.Inst.: 393 Mrd €
+  // Alle Knoten +100px nach unten verschoben für mehr Platz oben
+  // Alle Knoten +150px nach rechts verschoben, Finanzmarkt unten links
+  const nodes = {
+    haushalte: {
+      type: 'box', label: 'Haushalte',
+      box: [910, 600, 500, 200],       // √9504 ≈ 97.5 → Referenz
+    },
+    unternehmen: {
+      type: 'box', label: 'Unternehmen',
+      box: [340, 300, 480, 190],       // √9029 ≈ 95 → 97% von HH, nach links verschoben
+    },
+    staat: {
+      type: 'box', label: 'Staat',
+      box: [1490, 300, 230, 90],       // √1965 ≈ 44 → 45% von HH
+    },
+    'oeffentliche-dienstleister': {
+      type: 'box', label: 'Öffentliche Dienstleister',
+      box: [1490, 600, 200, 50],       // auf halber Höhe zwischen Staat und unten
+    },
+    ausland: {
+      type: 'invisible', label: 'Ausland',
+      box: [-50, 300, 80, 40],         // off-canvas links, auf Höhe von Unternehmen Mitte
+    },
+  };
+
+  /* ==============================================================
+     CONFIG · Flows
+     ============================================================== */
+  // Farbkodierung:
+  //   cycle: 'markt' → Grün  = Marktpreise (Konsum, Löhne privat, Dividenden)
+  //   cycle: 'staat' → Orange = Staatlich gesetzt (Steuern, Transfers, öff. Löhne)
+  const flows = [
+    // === KERN · Marktpreise (grün) ===================================
+    { id: 'konsum', tier: 'core', cycle: 'markt',
+      from: { node: 'haushalte',   side: 'top',   at: 0.22 },
+      to:   { node: 'unternehmen', side: 'right', at: 0.5  },
+      match: { Von: 'Haushalte', Zu: 'Unternehmen', Label: 'Konsum' },
+      labels: [{ name: 'Konsum', showValue: true }],
+    },
+    { id: 'lohn-markt', tier: 'core', cycle: 'markt',
+      from: { node: 'unternehmen', side: 'bottom', at: 0.75 },
+      to:   { node: 'haushalte',   side: 'bottom', at: 0.4 },
+      via: { y: 820 },
+      match: { Von: 'Unternehmen', Zu: 'Erwerbstätige' },
+      labels: [{ name: 'Lohn', showValue: true }],
+    },
+
+    // === KERN · Staatlich gesetzt (orange) ===========================
+    // Haushalte-Steuern und -Abgaben zu einem aggregierten Pipe:
+    //   Lohnsteuer + ESt (Erwerbstätige), USt + EUSt + Soli + SozBeitr (HH),
+    //   + Nicht veranl./Abgeltungsst. (Eigentümer)  →  Staat
+    { id: 'steuer-haushalte', tier: 'core', cycle: 'staat',
+      from: { node: 'haushalte', side: 'top',  at: 0.45 },
+      to:   { node: 'staat',     side: 'left', at: 0.5  },
+      match: { Von: ['Haushalte', 'Erwerbstätige', 'Eigentümer'], Zu: 'Staat' },
+      labels: [{ name: 'Steuer · Abgaben', showValue: true,
+                 note: 'LSt · ESt · USt · EUSt · Soli · Soz.Beitr. · Kapital' }],
+    },
+    { id: 'lohn-staat', tier: 'core', cycle: 'staat',
+      from: { node: 'staat',     side: 'bottom', at: 0.15 },
+      to:   { node: 'haushalte', side: 'bottom', at: 0.95 },
+      via: { y: 750 },
+      match: { Von: 'Staat', Zu: 'Erwerbstätige' },
+      labels: [{ name: 'Lohn', showValue: true }],
+    },
+    { id: 'transfer', tier: 'core', cycle: 'staat',
+      from: { node: 'staat',     side: 'bottom', at: 0.85 },
+      to:   { node: 'haushalte', side: 'bottom', at: 0.7 },
+      via: { y: 900 },
+      match: { Von: 'Staat', Zu: 'Haushalte' },
+      labels: [{ name: 'Sozialleistungen', showValue: true }],
+    },
+
+    // === SEKUNDÄR · Kapital · Unternehmen → Haushalte (Marktpreise) ==
+    // Ganz rechts an Unternehmen abgehend, überwiegend direkt nach unten in HH.
+    { id: 'dividende', tier: 'secondary', cycle: 'markt',
+      from: { node: 'unternehmen', side: 'bottom', at: 0.97 },
+      to:   { node: 'haushalte',   side: 'top',    at: 0.1  },
+      via: { y: 480 },
+      match: { Von: 'Unternehmen', Zu: 'Eigentümer' },
+      labels: [{ name: 'Dividende', showValue: true }],
+    },
+
+    // === SEKUNDÄR · Ausland-Flows ========================================
+    { id: 'exporte', tier: 'secondary', cycle: 'ausland',
+      from: { node: 'unternehmen', side: 'left',  at: 0.3 },
+      to:   { x: -50, y: 262, side: 'right' },
+      match: { Von: 'Unternehmen', Zu: 'Ausland', Label: 'Exporte' },
+      labels: [{ name: 'Exporte', showValue: true }],
+    },
+    { id: 'importe', tier: 'secondary', cycle: 'ausland',
+      from: { x: -50, y: 338, side: 'right' },
+      to:   { node: 'unternehmen', side: 'left',  at: 0.7 },
+      match: { Von: 'Ausland', Zu: 'Unternehmen', Label: 'Importe' },
+      labels: [{ name: 'Importe', showValue: true }],
+    },
+    { id: 'ausland-div', tier: 'secondary', cycle: 'ausland',
+      from: { node: 'unternehmen', side: 'top', at: 0.02 },
+      to:   { x: 110, y: 0, side: 'bottom' },
+      match: { Von: 'Unternehmen', Zu: 'Ausland', Label: 'Ausschüttung' },
+      labels: [{ at: [110, 100], anchor: 'middle', name: 'Dividenden', showValue: true }],
+    },
+    { id: 'ausland-direktinv-out', tier: 'secondary', cycle: 'ausland',
+      from: { node: 'unternehmen', side: 'top', at: 0.08 },
+      to:   { x: 138, y: 0, side: 'bottom' },
+      match: { Von: 'Unternehmen', Zu: 'Ausland', Label: 'Direktinvestition' },
+      labels: [{ at: [138, 180], anchor: 'middle', name: 'Direktinv. (out)', showValue: true }],
+    },
+    { id: 'ausland-direktinv-in', tier: 'secondary', cycle: 'ausland',
+      from: { x: 182, y: 0, side: 'bottom' },
+      to:   { node: 'unternehmen', side: 'top', at: 0.17 },
+      match: { Von: 'Ausland', Zu: 'Unternehmen', Label: 'Direktinvestition' },
+      labels: [{ at: [182, 30], anchor: 'middle', name: 'Direktinv. (in)', showValue: true }],
+    },
+    { id: 'ausland-finanz-out', tier: 'secondary', cycle: 'ausland',
+      from: { node: 'unternehmen', side: 'top', at: 0.26 },
+      to:   { x: 225, y: 0, side: 'bottom' },
+      match: { Von: 'Unternehmen', Zu: 'Ausland', Label: 'Finanzanlagen' },
+      labels: [{ at: [225, 130], anchor: 'middle', name: 'Wertpapiere (out)', showValue: true }],
+    },
+    { id: 'ausland-finanz-in', tier: 'secondary', cycle: 'ausland',
+      from: { x: 268, y: 0, side: 'bottom' },
+      to:   { node: 'unternehmen', side: 'top', at: 0.35 },
+      match: { Von: 'Ausland', Zu: 'Unternehmen', Label: 'Finanzanlagen' },
+      labels: [{ at: [268, 80], anchor: 'middle', name: 'Wertpapiere (in)', showValue: true }],
+    },
+
+    // === SEKUNDÄR · Unternehmen Selbst-Investition (Marktpreise, unten) =
+    { id: 'investition-unt', tier: 'secondary', cycle: 'markt',
+      from: { node: 'unternehmen', side: 'bottom', at: 0.15 },
+      to:   { node: 'unternehmen', side: 'bottom', at: 0.55 },
+      via: { y: 480 },
+      match: { Von: 'Unternehmen', Zu: 'Unternehmen' },
+      labels: [{ name: 'Investition', showValue: true }],
+    },
+
+    // === SEKUNDÄR · Staat-Querflüsse (staatlich gesetzt) =============
+    { id: 'staat-sachleistungen', tier: 'secondary', cycle: 'staat',
+      from: { node: 'staat',                    side: 'bottom', at: 0.543 },
+      to:   { node: 'oeffentliche-dienstleister', side: 'top',  at: 0.55  },
+      match: { Von: 'Staat', Zu: 'Öffentliche Dienstleister', Label: 'Sachleistungen' },
+      labels: [{ at: [1500, 520], anchor: 'middle', name: 'Sachleistungen', showValue: true }],
+    },
+    { id: 'steuer-unternehmen', tier: 'secondary', cycle: 'staat',
+      from: { node: 'unternehmen', side: 'top', at: 0.88 },
+      to:   { node: 'staat',       side: 'top', at: 0.4 },
+      via: { y: 130 },
+      match: { Von: 'Unternehmen', Zu: 'Staat' },
+      labels: [{ name: 'Steuer', showValue: true, note: 'Körperschaftssteuer' }],
+    },
+
+    // === SEKUNDÄR · Staat-Investitionen (oben, über Sachleistungen) ===
+    { id: 'staat-investitionen', tier: 'secondary', cycle: 'markt',
+      from: { node: 'staat',       side: 'top', at: 0.5 },
+      to:   { node: 'unternehmen', side: 'top', at: 0.6 },
+      via: { y: 30 },
+      match: { Von: 'Staat', Zu: 'Unternehmen', Label: 'Investition' },
+      labels: [{ name: 'Staat · Investitionen', showValue: true }],
+    },
+    { id: 'subventionen', tier: 'secondary', cycle: 'staat',
+      from: { node: 'staat',       side: 'top', at: 0.3 },
+      to:   { node: 'unternehmen', side: 'top', at: 0.75 },
+      via: { y: 70 },
+      match: { Von: 'Staat', Zu: 'Unternehmen', Label: 'Subventionen' },
+      labels: [{ name: 'Subventionen', showValue: true }],
+    },
+    { id: 'staat-zuweisungen', tier: 'secondary', cycle: 'staat',
+      from: { node: 'staat',                      side: 'bottom', at: 0.326 },
+      to:   { node: 'oeffentliche-dienstleister', side: 'top',    at: 0.3   },
+      match: { Von: 'Staat', Zu: 'Öffentliche Dienstleister', Label: 'Staatl. Leistung' },
+      labels: [{ at: [1450, 400], anchor: 'middle', name: 'Zuweisungen', showValue: true, note: 'Forschung' }],
+    },
+
+    // === SEKUNDÄR · Öffentliche Dienstleister → Haushalte (Löhne) ========
+    { id: 'lohn-oeffentlich', tier: 'secondary', cycle: 'staat',
+      from: { node: 'oeffentliche-dienstleister', side: 'bottom', at: 0.5  },
+      to:   { node: 'haushalte',                  side: 'bottom', at: 0.85 },
+      via: { y: 820 },
+      match: { Von: 'Öffentliche Dienstleister', Zu: 'Haushalte' },
+      labels: [{ name: 'Lohn', showValue: true, note: 'Öff. Dienstleister' }],
+    },
+
+  ];
+
+  /* ==============================================================
+     CONFIG · Annotations (interaktive Erklärungen)
+     ============================================================== */
+  const annotations = [
+    {
+      id: 1,
+      x: 172,
+      y: 350,
+      title: 'Investitionen steigern',
+      text: 'Investitionen erhöhen durch Fokus auf Profitabilität und neue Technologien.',
+      image: 'econ_profit_2.png',
+    },
+    {
+      id: 2,
+      x: 460,
+      y: 350,
+      title: 'Fokus Living Wage',
+      text: 'Wer ausreichend verdient, braucht keine Sozialleistungen und konsumiert.',
+      image: 'living_wage.png',
+      imageSize: 'small',
+    },
+    {
+      id: 3,
+      x: 340,
+      y: 240,
+      title: 'Vermögensungleichheit reduzieren',
+      text: 'Mehr Konsum, weniger Kapitalexport.',
+      image: 'dao_wealth_inequality.png',
+      arrows: [
+        { to: [225, 130] },   // → Wertpapiere (out)
+        { to: [620, 290] },   // → Konsum
+      ],
+    },
+    {
+      id: 4,
+      x: 950,
+      y: 95,
+      title: 'Subventionen reduzieren',
+      text: 'Durch Fokus auf tragfähige Geschäftsmodelle und Aufbau von Neuem.',
+      image: 'fiskar.png',
+    },
+    {
+      id: 5,
+      x: 870,
+      y: 720,
+      title: 'Erwerbstätigkeit erhöhen',
+      text: 'Möglichst viele Menschen in Arbeit bringen.',
+      image: 'arbeitsmarkt.png',
+      imageSize: 'small',
+    },
+    {
+      id: 6,
+      x: 1550,
+      y: 500,
+      title: 'Exzellente öffentliche Leistungen',
+      text: 'Geld folgt Zielen.',
+      images: ['bildung.png', 'bahn.png'],
+      popupPosition: 'left',
+    },
+    {
+      id: 7,
+      x: 1120,
+      y: 895,
+      title: 'Daseinsvorsorge statt Schadensbekämpfung',
+      text: '',
+      image: 'wohnen.png',
+    },
+    {
+      id: 8,
+      x: 680,
+      y: 35,
+      title: 'Capex optimieren',
+      text: 'Planung und Ausnutzen der staatlichen Bilanz.',
+      image: 'evu_finanzierung.png',
+    },
+    {
+      id: 9,
+      x: 850,
+      y: 230,
+      title: 'Bewusste Makropolitik',
+      text: 'Schuldenregeln, Steuern, Regulierung.',
+      image: 'sb.png',
+    },
+  ];
+
+  /* ==============================================================
+     CONFIG · CSV-Daten (Spiegel von data.csv)
+     ============================================================== */
+  const csvRows = [
+    { Von: 'Haushalte',     Zu: 'Unternehmen',               Label: 'Konsum',           Indikator: 'Individualkonsum',                    Wert: 3007 },
+    { Von: 'Erwerbstätige', Zu: 'Staat',                     Label: 'Steuer',           Indikator: 'Lohnsteuer',                          Wert: 263  },
+    { Von: 'Erwerbstätige', Zu: 'Staat',                     Label: 'Steuer',           Indikator: 'Veranlagte Est',                      Wert: 78   },
+    { Von: 'Eigentümer',    Zu: 'Staat',                     Label: 'Steuer',           Indikator: 'Nicht veranlagte Steuern auf Ertrag', Wert: 31   },
+    { Von: 'Eigentümer',    Zu: 'Staat',                     Label: 'Steuer',           Indikator: 'Abgeltungssteuer',                    Wert: 25   },
+    { Von: 'Unternehmen',   Zu: 'Staat',                     Label: 'Steuer',           Indikator: 'Körperschaftssteuer',                 Wert: 39   },
+    { Von: 'Haushalte',     Zu: 'Staat',                     Label: 'Steuer',           Indikator: 'Umsatzsteuer',                        Wert: 236  },
+    { Von: 'Haushalte',     Zu: 'Staat',                     Label: 'Steuer',           Indikator: 'Einfuhrumsatzsteuer',                 Wert: 74   },
+    { Von: 'Haushalte',     Zu: 'Staat',                     Label: 'Steuer',           Indikator: 'Soli',                                Wert: 13   },
+    { Von: 'Haushalte',     Zu: 'Staat',                     Label: 'Abgaben',          Indikator: 'Sozialbeiträge',                      Wert: 741  },
+    { Von: 'Staat',         Zu: 'Erwerbstätige',             Label: 'Löhne',            Indikator: 'Arbeitnehmerentgelt des Staates',     Wert: 384  },
+    { Von: 'Staat',         Zu: 'Haushalte',                 Label: 'Staatl. Leistung', Indikator: 'Monetäre Sozialleistungen',           Wert: 749  },
+    { Von: 'Staat',         Zu: 'Öffentliche Dienstleister', Label: 'Sachleistungen',   Indikator: 'Soziale Sachleistungen',              Wert: 415  },
+    { Von: 'Unternehmen',   Zu: 'Eigentümer',                Label: 'Ausschüttung',     Indikator: 'Dividenden',                          Wert: 27   },
+    { Von: 'Unternehmen',   Zu: 'Ausland',                   Label: 'Ausschüttung',     Indikator: 'Dividenden',                          Wert: 27   },
+    { Von: 'Staat',         Zu: 'Unternehmen',               Label: 'Investition',      Indikator: 'Bruttoinvestitionen des Staates',     Wert: 125  },
+    { Von: 'Staat',         Zu: 'Öffentliche Dienstleister', Label: 'Staatl. Leistung', Indikator: 'Zuweisungen Forschung',               Wert: 20   },
+    { Von: 'Unternehmen',   Zu: 'Erwerbstätige',             Label: 'Löhne',            Indikator: 'Arbeitnehmerentgelt',                 Wert: 1883 },
+    { Von: 'Unternehmen',   Zu: 'Unternehmen',               Label: 'Investition',      Indikator: 'Bruttoanlageinvestitionen',           Wert: 537.5 },
+    { Von: 'Unternehmen',   Zu: 'Ausland',                   Label: 'Exporte',          Indikator: 'Exporte',                             Wert: 1807 },
+    { Von: 'Ausland',       Zu: 'Unternehmen',               Label: 'Importe',          Indikator: 'Importe',                             Wert: 1702 },
+        { Von: 'Unternehmen',   Zu: 'Ausland',                   Label: 'Direktinvestition', Indikator: 'Direktinvestitionen',                Wert: 97.53 },
+    { Von: 'Unternehmen',   Zu: 'Ausland',                   Label: 'Finanzanlagen',     Indikator: 'Wertpapieranlagen',                  Wert: 281.12 },
+    { Von: 'Ausland',       Zu: 'Unternehmen',               Label: 'Direktinvestition', Indikator: 'Ausl. Direktinvestitionen',          Wert: 86.14 },
+    { Von: 'Ausland',       Zu: 'Unternehmen',               Label: 'Finanzanlagen',     Indikator: 'Ausl. Wertpapieranlagen',            Wert: 229.44 },
+    { Von: 'Öffentliche Dienstleister', Zu: 'Haushalte',   Label: 'Löhne',             Indikator: 'Geschätzt',                          Wert: 210 },
+    { Von: 'Staat',         Zu: 'Unternehmen',               Label: 'Subventionen',      Indikator: 'Subventionen',                       Wert: 36.5 },
+  ];
+
+  const footnote = 'Pipe-Breite ∝ √Wert · gestrichelt = noch nicht quantifiziert. Daten: Destatis 81000-0007/0019/0031, 21811-0010, Außenhandel 2025; BMF Steuereinnahmen Q4 2025; EY DAX-Dividendenstudie 2025; ECB QSA.';
+
+  /* ==============================================================
+     ENGINE · Ankerpunkt
+     Zwei Varianten:
+       { node, side, at }  — Kante eines Knotens
+       { x, y, side }      — Roh-Punkt (z.B. Abzweig von anderem Pipe)
+                             `side` gibt die Pipe-Austrittsrichtung an
+     ============================================================== */
+  function anchor(spec) {
+    if (spec.node) {
+      const [cx, cy, w, h] = nodes[spec.node].box;
+      const x0 = cx - w/2, y0 = cy - h/2;
+      switch (spec.side) {
+        case 'top':    return { x: x0 + w * spec.at, y: y0       };
+        case 'bottom': return { x: x0 + w * spec.at, y: y0 + h   };
+        case 'left':   return { x: x0,               y: y0 + h * spec.at };
+        case 'right':  return { x: x0 + w,           y: y0 + h * spec.at };
+      }
+      throw new Error(`unknown side: ${spec.side}`);
+    }
+    // Roh-Punkt
+    return { x: spec.x, y: spec.y };
+  }
+
+  /* ==============================================================
+     ENGINE · Rechtwinkliger Pfad (L- oder Z-Form, auto-gewählt)
+     ============================================================== */
+  function route(fromSpec, toSpec, via) {
+    const f = anchor(fromSpec), t = anchor(toSpec);
+    const fAxis = (fromSpec.side === 'top' || fromSpec.side === 'bottom') ? 'v' : 'h';
+    const tAxis = (toSpec.side   === 'top' || toSpec.side   === 'bottom') ? 'v' : 'h';
+    if (fAxis === 'v' && tAxis === 'h')
+      return `M ${f.x} ${f.y} V ${t.y} H ${t.x}`;
+    if (fAxis === 'h' && tAxis === 'v')
+      return `M ${f.x} ${f.y} H ${t.x} V ${t.y}`;
+    if (fAxis === 'v' && tAxis === 'v') {
+      const midY = via?.y ?? (f.y + t.y) / 2;
+      return `M ${f.x} ${f.y} V ${midY} H ${t.x} V ${t.y}`;
+    }
+    const midX = via?.x ?? (f.x + t.x) / 2;
+    return `M ${f.x} ${f.y} H ${midX} V ${t.y} H ${t.x}`;
+  }
+
+  /* ==============================================================
+     ENGINE · CSV-Zeilen matchen und aufsummieren
+     ============================================================== */
+  function aggregate(match) {
+    if (!match) return { value: null, rows: [] };
+    const rows = csvRows.filter(row =>
+      Object.entries(match).every(([k, v]) =>
+        Array.isArray(v) ? v.includes(row[k]) : row[k] === v));
+    if (!rows.length) return { value: null, rows: [] };
+    return { value: rows.reduce((s, r) => s + r.Wert, 0), rows };
+  }
+
+  function valueOf(flow) {
+    if (flow.value != null) return flow.value;
+    return aggregate(flow.match).value;
+  }
+
+  /* ==============================================================
+     ENGINE · Pipe-Breite · √-Skala
+     ============================================================== */
+  const K = 1.6, MIN_D = 10, MAX_D = 90;
+  function widthOf(v) {
+    return v == null ? null : Math.max(MIN_D, Math.min(MAX_D, K * Math.sqrt(v)));
+  }
+
+  const fmtEUR = v =>
+    v == null ? '' : Math.round(v).toLocaleString('de-DE') + ' Mrd. €';
+
+  /* ==============================================================
+     RENDER · SVG-Hilfen
+     ============================================================== */
+  function mk(tag, attrs, text) {
+    const el = document.createElementNS(SVG_NS, tag);
+    for (const k in attrs || {}) el.setAttribute(k, attrs[k]);
+    if (text !== undefined) el.textContent = text;
+    return el;
+  }
+
+  function parsePath(d) {
+    const tk = d.trim().split(/\s+/);
+    let x = 0, y = 0; const pts = [];
+    for (let i = 0; i < tk.length; ) {
+      const c = tk[i];
+      if      (c === 'M') { x = +tk[i+1]; y = +tk[i+2]; pts.push({x, y}); i += 3; }
+      else if (c === 'V') { y = +tk[i+1];              pts.push({x, y}); i += 2; }
+      else if (c === 'H') { x = +tk[i+1];              pts.push({x, y}); i += 2; }
+      else i++;
+    }
+    // filter duplicates (degenerate zero-length segments from default midpoints)
+    const clean = pts.filter((p, i) => i === 0 || p.x !== pts[i-1].x || p.y !== pts[i-1].y);
+    const s0 = clean[0], s1 = clean[1] || clean[0];
+    const eN = clean[clean.length-1], eP = clean[clean.length-2] || eN;
+    const startDir = (s1.x === s0.x)
+      ? (s1.y > s0.y ? 'up'    : 'down')
+      : (s1.x > s0.x ? 'left'  : 'right');
+    const endDir = (eP.x === eN.x)
+      ? (eN.y > eP.y ? 'down'  : 'up')
+      : (eN.x > eP.x ? 'right' : 'left');
+    return { start: s0, end: eN, startDir, endDir };
+  }
+
+  const WALL = 1, FL_H = 14, FL_RATIO = 1.55, INSET = 2;
+  // ratio = 1.0 ergibt einen flachen Stub (keine Trichter-Weitung);
+  // ratio = FL_RATIO (default) ergibt den Foster-Flare am Empfänger.
+  function buildFlare(cx, cy, dir, D, ratio = FL_RATIO) {
+    const d = D/2, w = (D * ratio)/2, H = FL_H;
+    const shell = (off) => {
+      const di = d + off, wi = w + off;
+      switch (dir) {
+        case 'up':    { const m = cy - INSET, b = cy + H, mid = cy + H/2;
+          return `M ${cx-di} ${b} C ${cx-di} ${mid} ${cx-wi} ${mid} ${cx-wi} ${m} L ${cx+wi} ${m} C ${cx+wi} ${mid} ${cx+di} ${mid} ${cx+di} ${b} Z`; }
+        case 'down':  { const m = cy + INSET, b = cy - H, mid = cy - H/2;
+          return `M ${cx-di} ${b} C ${cx-di} ${mid} ${cx-wi} ${mid} ${cx-wi} ${m} L ${cx+wi} ${m} C ${cx+wi} ${mid} ${cx+di} ${mid} ${cx+di} ${b} Z`; }
+        case 'left':  { const m = cx - INSET, b = cx + H, mid = cx + H/2;
+          return `M ${b} ${cy-di} C ${mid} ${cy-di} ${mid} ${cy-wi} ${m} ${cy-wi} L ${m} ${cy+wi} C ${mid} ${cy+wi} ${mid} ${cy+di} ${b} ${cy+di} Z`; }
+        case 'right': { const m = cx + INSET, b = cx - H, mid = cx - H/2;
+          return `M ${b} ${cy-di} C ${mid} ${cy-di} ${mid} ${cy-wi} ${m} ${cy-wi} L ${m} ${cy+wi} C ${mid} ${cy+wi} ${mid} ${cy+di} ${b} ${cy+di} Z`; }
+      }
+    };
+    return { outer: shell(WALL), inner: shell(0) };
+  }
+
+  /* ==============================================================
+     ENGINE · Segment-Parser (für Auto-Label und Chevron)
+     ============================================================== */
+  function parseSegments(pathD) {
+    const tk = pathD.trim().split(/\s+/);
+    let x = 0, y = 0; const segs = [];
+    for (let i = 0; i < tk.length; ) {
+      const c = tk[i];
+      if      (c === 'M') { x = +tk[i+1]; y = +tk[i+2]; i += 3; }
+      else if (c === 'V') { const ny = +tk[i+1];
+        if (ny !== y) segs.push({ kind: 'v', x0: x, y0: y, x1: x, y1: ny });
+        y = ny; i += 2;
+      }
+      else if (c === 'H') { const nx = +tk[i+1];
+        if (nx !== x) segs.push({ kind: 'h', x0: x, y0: y, x1: nx, y1: y });
+        x = nx; i += 2;
+      }
+      else i++;
+    }
+    return segs;
+  }
+  function longestSegment(segs) {
+    return segs.reduce((a, b) => {
+      const la = a.kind === 'h' ? Math.abs(a.x1 - a.x0) : Math.abs(a.y1 - a.y0);
+      const lb = b.kind === 'h' ? Math.abs(b.x1 - b.x0) : Math.abs(b.y1 - b.y0);
+      return lb > la ? b : a;
+    });
+  }
+
+  /* ==============================================================
+     ENGINE · Chevron-Pfad (Flussrichtung in der Pipe)
+     Offenes ">" in der Pipe-Innenfarbe-Richtung, dezent.
+     ============================================================== */
+  function buildChevron(cx, cy, dir, size) {
+    const s = size;
+    switch (dir) {
+      case 'right': return `M ${cx-s} ${cy-s} L ${cx+s} ${cy} L ${cx-s} ${cy+s}`;
+      case 'left':  return `M ${cx+s} ${cy-s} L ${cx-s} ${cy} L ${cx+s} ${cy+s}`;
+      case 'down':  return `M ${cx-s} ${cy-s} L ${cx} ${cy+s} L ${cx+s} ${cy-s}`;
+      case 'up':    return `M ${cx-s} ${cy+s} L ${cx} ${cy-s} L ${cx+s} ${cy+s}`;
+    }
+    return '';
+  }
+
+  /* ==============================================================
+     ENGINE · Auto-Label-Position
+     Legt das Label auf das längste Segment des Pfads, senkrecht
+     versetzt um D/2 + padding. Wählt Seite so, dass das Label vom
+     Canvas-Zentrum wegzeigt (oben/unten bzw. links/rechts).
+     Override per `label.at`, `label.anchor`, `label.notePos`.
+     ============================================================== */
+  function autoLabel(pathD, D) {
+    const tk = pathD.trim().split(/\s+/);
+    let x = 0, y = 0; const segs = [];
+    for (let i = 0; i < tk.length; ) {
+      const c = tk[i];
+      if      (c === 'M') { x = +tk[i+1]; y = +tk[i+2]; i += 3; }
+      else if (c === 'V') { const ny = +tk[i+1];
+        if (ny !== y) segs.push({ kind: 'v', x0: x, y0: y, x1: x,  y1: ny });
+        y = ny; i += 2;
+      }
+      else if (c === 'H') { const nx = +tk[i+1];
+        if (nx !== x) segs.push({ kind: 'h', x0: x, y0: y, x1: nx, y1: y  });
+        x = nx; i += 2;
+      }
+      else i++;
+    }
+    if (!segs.length) return null;
+    const best = segs.reduce((a, b) => {
+      const la = a.kind === 'h' ? Math.abs(a.x1 - a.x0) : Math.abs(a.y1 - a.y0);
+      const lb = b.kind === 'h' ? Math.abs(b.x1 - b.x0) : Math.abs(b.y1 - b.y0);
+      return lb > la ? b : a;
+    });
+    const W = 1600, H = 1000;
+    if (best.kind === 'h') {
+      const mx = (best.x0 + best.x1) / 2;
+      return {
+        at: [mx, best.y0],
+        anchor: 'middle',
+        notePos: best.y0 < H / 2 ? 'above' : 'below',
+      };
+    } else {
+      const my = (best.y0 + best.y1) / 2;
+      return {
+        at: [best.x0, my],
+        anchor: 'middle',  // immer zentriert
+        notePos: 'below',
+      };
+    }
+  }
+
+  /* ==============================================================
+     RENDER · Knoten + Container
+     ============================================================== */
+  function renderNodes() {
+    const containerG = document.getElementById('container');
+    const nodesG     = document.getElementById('nodes');
+    for (const [id, n] of Object.entries(nodes)) {
+      if (n.type === 'invisible') continue;      // nur Anker, keine Darstellung
+      const [cx, cy, w, h] = n.box;
+      const x = cx - w/2, y = cy - h/2;
+      if (n.type === 'container') {
+        containerG.appendChild(mk('rect', {
+          class: 'container-box', x, y, width: w, height: h }));
+        containerG.appendChild(mk('text', {
+          class: 'container-label', x: x + 14, y: y + 22 }, n.label));
+      } else {
+        const g = mk('g', { class: 'node', 'data-anchor': id,
+          transform: `translate(${cx} ${cy})` });
+        g.appendChild(mk('rect', { class: 'node-box',
+          x: -w/2, y: -h/2, width: w, height: h }));
+        g.appendChild(mk('text', { class: 'node-label',
+          'text-anchor': 'middle', dy: 5 }, n.label));
+        nodesG.appendChild(g);
+      }
+    }
+  }
+
+  /* ==============================================================
+     RENDER · Pipes + Flares
+     ============================================================== */
+  function renderPipes() {
+    const pipesG  = document.getElementById('pipes');
+    const flaresG = document.getElementById('flares');
+
+    const sorted = [...flows].sort((a, b) => {
+      const va = valueOf(a), vb = valueOf(b);
+      if (va == null && vb == null) return 0;
+      if (va == null) return -1;
+      if (vb == null) return  1;
+      return va - vb;
+    });
+
+    for (const flow of sorted) {
+      const d = route(flow.from, flow.to, flow.via);
+      const v = valueOf(flow);
+      const D = widthOf(v);
+      const cycleAttr = flow.cycle ? { 'data-cycle': flow.cycle } : {};
+
+      if (D == null) {
+        pipesG.appendChild(mk('path', {
+          class: 'pipe-dashed', 'data-flow': flow.id, d, ...cycleAttr }));
+        continue;
+      }
+      pipesG.appendChild(mk('path', {
+        class: 'pipe-outer', 'data-flow': flow.id, d, ...cycleAttr,
+        style: `stroke-width: ${(D + 2 * WALL).toFixed(1)}`,
+      }));
+      pipesG.appendChild(mk('path', {
+        class: 'pipe-inner', 'data-flow': flow.id, d, ...cycleAttr,
+        style: `stroke-width: ${D.toFixed(1)}`,
+      }));
+
+      // Flare/Stub · Richtung durch unterschiedliche Form:
+      //   Start (Sender)    → flacher Stub (ratio 1.0) bricht nur die Box-Linie
+      //   Ziel (Empfänger)  → voller Trichter-Flare (ratio FL_RATIO)
+      const { start, end, startDir, endDir } = parsePath(d);
+      if (flow.from.node) {
+        const f = buildFlare(start.x, start.y, startDir, D, 1.0);
+        flaresG.appendChild(mk('path', { class: 'flare-outer', 'data-flow': flow.id, d: f.outer, ...cycleAttr }));
+        flaresG.appendChild(mk('path', { class: 'flare-inner', 'data-flow': flow.id, d: f.inner, ...cycleAttr }));
+      }
+      if (flow.to.node) {
+        const f = buildFlare(end.x, end.y, endDir, D);
+        flaresG.appendChild(mk('path', { class: 'flare-outer', 'data-flow': flow.id, d: f.outer, ...cycleAttr }));
+        flaresG.appendChild(mk('path', { class: 'flare-inner', 'data-flow': flow.id, d: f.inner, ...cycleAttr }));
+      }
+
+      // Chevron mittig am längsten Segment — zeigt Flussrichtung
+      {
+        const segs = parseSegments(d);
+        if (segs.length) {
+          const seg = longestSegment(segs);
+          const mx = (seg.x0 + seg.x1) / 2;
+          const my = (seg.y0 + seg.y1) / 2;
+          const dir = seg.kind === 'h'
+            ? (seg.x1 > seg.x0 ? 'right' : 'left')
+            : (seg.y1 > seg.y0 ? 'down'  : 'up');
+          const size = Math.max(4, Math.min(D * 0.4, 10));
+          const chev = buildChevron(mx, my, dir, size);
+          pipesG.appendChild(mk('path', {
+            class: 'pipe-chevron', 'data-flow': flow.id, d: chev, ...cycleAttr,
+          }));
+        }
+      }
+    }
+  }
+
+  /* ==============================================================
+     RENDER · Labels
+     ============================================================== */
+  function renderLabels() {
+    const labelsG = document.getElementById('pipe-labels');
+    for (const flow of flows) {
+      const v = valueOf(flow);
+      const D = widthOf(v) || 5;
+      const pathD = route(flow.from, flow.to, flow.via);
+      const auto  = autoLabel(pathD, D);
+      for (const label of flow.labels || []) {
+        const at      = label.at      ?? (auto ? auto.at      : [0, 0]);
+        const anchor  = label.anchor  ?? (auto ? auto.anchor  : 'middle');
+        const notePos = label.notePos ?? (auto ? auto.notePos : 'below');
+        const g = mk('g', { class: 'pipe-label',
+          transform: `translate(${at[0]} ${at[1]})` });
+        if (label.name) {
+          g.appendChild(mk('text',
+            { class: 'pipe-name', 'text-anchor': anchor }, label.name));
+        }
+        if (label.showValue) {
+          const dy = notePos === 'above' ? -14 : 18;
+          g.appendChild(mk('text',
+            { class: 'pipe-value', 'text-anchor': anchor, dy }, fmtEUR(v)));
+        }
+        if (label.note) {
+          const dy = notePos === 'above' ? -30 : 34;
+          g.appendChild(mk('text',
+            { class: 'pipe-note', 'text-anchor': anchor, dy }, label.note));
+        }
+        labelsG.appendChild(g);
+      }
+    }
+  }
+
+  function renderFooter() {
+    const g = document.getElementById('footer');
+    g.setAttribute('transform', 'translate(40 970)');
+    g.appendChild(mk('text', { class: 'footnote' }, footnote));
+  }
+
+  /* ==============================================================
+     RENDER · Annotations (nummerierte Kreise)
+     ============================================================== */
+  function renderAnnotations() {
+    const g = document.getElementById('annotations');
+    const radius = 12;
+
+    for (const ann of annotations) {
+      // Pfeile zuerst zeichnen (unter dem Marker)
+      if (ann.arrows) {
+        for (const arrow of ann.arrows) {
+          const line = mk('line', {
+            class: 'annotation-arrow',
+            x1: ann.x,
+            y1: ann.y,
+            x2: arrow.to[0],
+            y2: arrow.to[1],
+          });
+          g.appendChild(line);
+        }
+      }
+
+      const marker = mk('g', {
+        class: 'annotation-marker',
+        'data-annotation': ann.id,
+        transform: `translate(${ann.x} ${ann.y})`,
+      });
+
+      marker.appendChild(mk('circle', {
+        class: 'annotation-circle',
+        cx: 0, cy: 0, r: radius,
+      }));
+
+      marker.appendChild(mk('text', {
+        class: 'annotation-number',
+        x: 0, y: 0,
+      }, ann.id.toString()));
+
+      g.appendChild(marker);
+    }
+  }
+
+  /* ==============================================================
+     INTERAKTIVITÄT · Annotation-Popups
+     ============================================================== */
+  function setupAnnotationPopups() {
+    const popup = document.getElementById('annotation-popup');
+    const popupNumber = document.getElementById('popup-number');
+    const popupTitle = document.getElementById('popup-title');
+    const popupText = document.getElementById('popup-text');
+    const popupImages = document.getElementById('popup-images');
+    const popupClose = document.getElementById('popup-close');
+    const diagramWrap = document.querySelector('.diagram-wrap');
+
+    let activeAnnotation = null;
+
+    function showPopup(ann, markerEl) {
+      popupNumber.textContent = ann.id;
+      popupTitle.textContent = ann.title;
+      popupText.textContent = ann.text;
+
+      // Bilder anzeigen
+      popupImages.innerHTML = '';
+      const imageList = ann.images || (ann.image ? [ann.image] : []);
+      for (const imgSrc of imageList) {
+        const img = document.createElement('img');
+        img.src = imgSrc;
+        img.className = 'annotation-popup-image';
+        if (ann.imageSize === 'small') {
+          img.style.maxWidth = '200px';
+        }
+        popupImages.appendChild(img);
+      }
+
+      // Position relativ zum Marker berechnen
+      const svg = document.querySelector('.diagram');
+      const svgRect = svg.getBoundingClientRect();
+      const viewBox = svg.viewBox.baseVal;
+      const scaleX = svgRect.width / viewBox.width;
+      const scaleY = svgRect.height / viewBox.height;
+
+      let popupX, popupY;
+      if (ann.popupPosition === 'left') {
+        // Popup links vom Marker öffnen
+        popup.style.left = 'auto';
+        popup.style.right = (svgRect.width - (ann.x - viewBox.x) * scaleX + 20) + 'px';
+      } else {
+        popup.style.right = 'auto';
+        popup.style.left = ((ann.x - viewBox.x) * scaleX + 20) + 'px';
+      }
+      popup.style.top = ((ann.y - viewBox.y) * scaleY - 10) + 'px';
+      popup.classList.add('visible');
+      activeAnnotation = ann.id;
+    }
+
+    function hidePopup() {
+      popup.classList.remove('visible');
+      activeAnnotation = null;
+    }
+
+    // Click auf Marker
+    document.querySelectorAll('.annotation-marker').forEach(marker => {
+      marker.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const annId = parseInt(marker.getAttribute('data-annotation'));
+        const ann = annotations.find(a => a.id === annId);
+        if (ann) {
+          if (activeAnnotation === annId) {
+            hidePopup();
+          } else {
+            showPopup(ann, marker);
+          }
+        }
+      });
+    });
+
+    // Close-Button
+    popupClose.addEventListener('click', hidePopup);
+
+    // Click außerhalb schließt Popup
+    document.addEventListener('click', (e) => {
+      if (!popup.contains(e.target) && !e.target.closest('.annotation-marker')) {
+        hidePopup();
+      }
+    });
+  }
+
+  /* ==============================================================
+     VALIDATOR
+     ============================================================== */
+  function validate() {
+    const required = ['konsum', 'lohn-markt',
+                      'steuer-haushalte', 'lohn-staat', 'transfer'];
+    const core = flows.filter(f => f.tier === 'core').map(f => f.id);
+    const missing = required.filter(id => !core.includes(id));
+    if (missing.length)
+      console.warn('⚠ Wirtschaftskreislauf · Kernflow(s) fehlen:', missing.join(', '));
+
+    for (const f of flows) {
+      if (!nodes[f.from.node]) console.warn(`⚠ Flow "${f.id}" referenziert fehlenden Knoten "${f.from.node}"`);
+      if (!nodes[f.to.node])   console.warn(`⚠ Flow "${f.id}" referenziert fehlenden Knoten "${f.to.node}"`);
+    }
+  }
+
+  /* ==============================================================
+     INTERAKTIVITÄT · Hover-Effekte und fließende Chevron-Animation
+     ============================================================== */
+  function setupInteractivity() {
+    const svg = document.querySelector('.diagram');
+    const pipesG = document.getElementById('pipes');
+
+    // Erstelle animierte Chevrons für jede Pipe
+    const flowChevrons = {};
+    document.querySelectorAll('.pipe-inner').forEach(inner => {
+      const flowId = inner.getAttribute('data-flow');
+      const cycle = inner.getAttribute('data-cycle');
+      const d = inner.getAttribute('d');
+      const pipeWidth = parseFloat(inner.style.strokeWidth) || 20;
+
+      // Erstelle 3 Chevrons pro Pipe mit animateMotion
+      const chevronSize = Math.max(4, Math.min(pipeWidth * 0.35, 8));
+      const group = mk('g', { class: 'flow-chevron-group', 'data-flow': flowId });
+
+      for (let i = 0; i < 3; i++) {
+        const chevron = mk('path', {
+          class: 'flow-chevron',
+          'data-flow': flowId,
+          'data-cycle': cycle,
+          d: `M ${-chevronSize} ${-chevronSize} L 0 0 L ${-chevronSize} ${chevronSize}`,
+        });
+
+        // animateMotion für Bewegung entlang des Pfads
+        const anim = document.createElementNS(SVG_NS, 'animateMotion');
+        anim.setAttribute('dur', '5s');
+        anim.setAttribute('repeatCount', 'indefinite');
+        anim.setAttribute('begin', `${i * 1.67}s`); // Versetzt starten
+        anim.setAttribute('rotate', 'auto');
+        anim.setAttribute('calcMode', 'linear');
+
+        const mpath = document.createElementNS(SVG_NS, 'mpath');
+        mpath.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `#path-${flowId}`);
+        anim.appendChild(mpath);
+        chevron.appendChild(anim);
+
+        group.appendChild(chevron);
+      }
+
+      // Speichere Referenz-Pfad mit ID
+      inner.setAttribute('id', `path-${flowId}`);
+      flowChevrons[flowId] = group;
+      pipesG.appendChild(group);
+    });
+
+    // Hilfsfunktion: Finde alle Elemente eines Flows
+    function getFlowElements(flowId) {
+      return {
+        outers: document.querySelectorAll(`.pipe-outer[data-flow="${flowId}"]`),
+        inners: document.querySelectorAll(`.pipe-inner[data-flow="${flowId}"]`),
+        chevrons: document.querySelectorAll(`.pipe-chevron[data-flow="${flowId}"]`),
+        flares: document.querySelectorAll(`[data-flow="${flowId}"].flare-outer, [data-flow="${flowId}"].flare-inner`),
+        flowChevrons: document.querySelectorAll(`.flow-chevron[data-flow="${flowId}"]`),
+      };
+    }
+
+    // Hilfsfunktion: Finde verbundene Flows eines Knotens
+    function getConnectedFlows(nodeId) {
+      return flows.filter(f =>
+        f.from.node === nodeId || f.to.node === nodeId
+      ).map(f => f.id);
+    }
+
+    // Highlight aktivieren
+    function highlightFlow(flowId) {
+      svg.classList.add('has-hover');
+      const els = getFlowElements(flowId);
+      els.outers.forEach(el => el.classList.add('highlight'));
+      els.inners.forEach(el => el.classList.add('highlight'));
+      els.chevrons.forEach(el => el.classList.add('highlight'));
+      els.flares.forEach(el => el.classList.add('highlight'));
+      els.flowChevrons.forEach(el => el.classList.add('flowing'));
+
+      // Finde und highlighte das zugehörige Label
+      const flow = flows.find(f => f.id === flowId);
+      if (flow && flow.labels) {
+        const allLabels = document.querySelectorAll('.pipe-label');
+        let labelIdx = 0;
+        for (const f of flows) {
+          for (const lbl of (f.labels || [])) {
+            if (f.id === flowId) {
+              allLabels[labelIdx]?.classList.add('highlight');
+            }
+            labelIdx++;
+          }
+        }
+      }
+    }
+
+    // Highlight für Node und verbundene Flows
+    function highlightNode(nodeId) {
+      svg.classList.add('has-hover');
+      const node = document.querySelector(`.node[data-anchor="${nodeId}"]`);
+      if (node) node.classList.add('highlight');
+
+      const connectedFlowIds = getConnectedFlows(nodeId);
+      connectedFlowIds.forEach(flowId => {
+        const els = getFlowElements(flowId);
+        els.outers.forEach(el => el.classList.add('highlight'));
+        els.inners.forEach(el => el.classList.add('highlight'));
+        els.chevrons.forEach(el => el.classList.add('highlight'));
+        els.flares.forEach(el => el.classList.add('highlight'));
+        els.flowChevrons.forEach(el => el.classList.add('flowing'));
+
+        // Labels der verbundenen Flows highlighten
+        const allLabels = document.querySelectorAll('.pipe-label');
+        let labelIdx = 0;
+        for (const f of flows) {
+          for (const lbl of (f.labels || [])) {
+            if (f.id === flowId) {
+              allLabels[labelIdx]?.classList.add('highlight');
+            }
+            labelIdx++;
+          }
+        }
+      });
+    }
+
+    // Alle Highlights entfernen
+    function clearHighlights() {
+      svg.classList.remove('has-hover');
+      document.querySelectorAll('.highlight').forEach(el => el.classList.remove('highlight'));
+      document.querySelectorAll('.flowing').forEach(el => el.classList.remove('flowing'));
+    }
+
+    // Event-Listener für Pipes
+    document.querySelectorAll('[data-flow]').forEach(el => {
+      el.addEventListener('mouseenter', (e) => {
+        const flowId = el.getAttribute('data-flow');
+        if (flowId) highlightFlow(flowId);
+      });
+      el.addEventListener('mouseleave', clearHighlights);
+    });
+
+    // Event-Listener für Nodes
+    document.querySelectorAll('.node').forEach(node => {
+      node.addEventListener('mouseenter', () => {
+        const nodeId = node.getAttribute('data-anchor');
+        if (nodeId) highlightNode(nodeId);
+      });
+      node.addEventListener('mouseleave', clearHighlights);
+    });
+  }
+
+  /* ==============================================================
+     BUILD
+     ============================================================== */
+  validate();
+  renderNodes();
+  renderPipes();
+  renderLabels();
+  renderFooter();
+  renderAnnotations();
+  setupInteractivity();
+  setupAnnotationPopups();
+
+  // Toggle annotations visibility
+  function setupAnnotationsToggle() {
+    const toggle = document.getElementById('annotations-toggle');
+    const annotationsGroup = document.getElementById('annotations');
+    const popup = document.getElementById('annotation-popup');
+
+    if (!toggle || !annotationsGroup) return;
+
+    toggle.addEventListener('change', () => {
+      if (toggle.checked) {
+        annotationsGroup.style.display = '';
+      } else {
+        annotationsGroup.style.display = 'none';
+        popup.classList.remove('visible');
+      }
+    });
+  }
+  setupAnnotationsToggle();
+
+})();
+</script>
+
+</body>
+</html>

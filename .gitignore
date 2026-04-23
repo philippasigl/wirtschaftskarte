@@ -1,15 +1,19 @@
 # Ignore everything
 *
 
-# Except map folder
+# Except these folders
 !map/
 !map/**
+!wirtschaftskreislauf/
+!wirtschaftskreislauf/**
 
-# But ignore these in map/
+# But ignore these
 map/*.png
 map/*.csv
 map/uploads/
+wirtschaftskreislauf/screenshot.png
 
 # And keep these files
+!index.html
 !.gitignore
 !.nojekyll

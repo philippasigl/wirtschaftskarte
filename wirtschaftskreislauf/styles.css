@@ -1,0 +1,415 @@
+:root {
+  --paper: #fbf9f3;
+  --paper-edge: #ece4d0;
+  --ink: #3a342e;          /* warm charcoal */
+  --ink-soft: #7a6f63;
+  --ink-faint: #b5a891;
+  --serif: 'Source Serif 4', 'ET Book', Georgia, serif;
+  --sans: 'Inter', system-ui, sans-serif;
+
+  /* Kreislauf-Farben */
+  --markt: #2e7d6a;        /* gedämpftes Teal/Grün */
+  --markt-soft: #4a9a87;
+  --markt-light: #c8e4dc;  /* helle Füllung */
+  --staat: #b85c38;        /* gedämpftes Terracotta/Orange */
+  --staat-soft: #d07a54;
+  --staat-light: #f3d9ce;  /* helle Füllung */
+  --ausland: #5c6b8a;      /* gedämpftes Blau/Grau */
+  --ausland-soft: #7a89a8;
+  --ausland-light: #d4dae6; /* helle Füllung */
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-feature-settings: "onum" 1, "kern" 1;
+}
+
+.topbar {
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  padding: 26px 48px 18px;
+  border-bottom: 1px solid var(--paper-edge);
+}
+.topbar .logo {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+.topbar .sub {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-weight: 500;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  cursor: pointer;
+  user-select: none;
+}
+.toggle-switch input {
+  display: none;
+}
+.toggle-slider {
+  width: 36px;
+  height: 20px;
+  background: var(--ink-faint);
+  border-radius: 10px;
+  position: relative;
+  transition: background 0.2s ease;
+}
+.toggle-slider::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: var(--paper);
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+}
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--ink);
+}
+.toggle-switch input:checked + .toggle-slider::after {
+  transform: translateX(16px);
+}
+.toggle-label {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  letter-spacing: 0.02em;
+}
+
+.stage {
+  padding: 32px 48px 48px;
+}
+.diagram-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 1650px;
+  margin: 0 auto;
+}
+.diagram {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* ---------- Pipes ---------- */
+/* Doppelwand-Effekt = äußerer Tintenstroke + innerer Papierstroke auf
+   demselben Pfad. stroke-linejoin:round gibt runde Kurven an jedem Knick. */
+.pipe-outer {
+  fill: none;
+  stroke: var(--ink);
+  stroke-linejoin: round;
+  stroke-linecap: butt;
+}
+.pipe-inner {
+  fill: none;
+  stroke: var(--paper);
+  stroke-linejoin: round;
+  stroke-linecap: butt;
+}
+.pipe-dashed {
+  fill: none;
+  stroke: var(--ink-faint);
+  stroke-width: 1;
+  stroke-linejoin: round;
+  stroke-linecap: butt;
+  stroke-dasharray: 4 5;
+}
+
+/* Kreislauf-spezifische Farben */
+.pipe-outer[data-cycle="markt"] { stroke: var(--markt); }
+.pipe-outer[data-cycle="staat"] { stroke: var(--staat); }
+.pipe-inner[data-cycle="markt"] { stroke: var(--markt-light); }
+.pipe-inner[data-cycle="staat"] { stroke: var(--staat-light); }
+.pipe-chevron[data-cycle="markt"] { stroke: var(--markt); }
+.pipe-chevron[data-cycle="staat"] { stroke: var(--staat); }
+.pipe-outer[data-cycle="ausland"] { stroke: var(--ausland); }
+.pipe-inner[data-cycle="ausland"] { stroke: var(--ausland-light); }
+.pipe-chevron[data-cycle="ausland"] { stroke: var(--ausland); }
+
+/* Flares: Foster-Style. Pipes münden trichterförmig in die Knoten.
+   outer = Tintenschale, inner = Papierkern → hohle Trompete. */
+.flare-outer { fill: var(--ink);   stroke: none; }
+.flare-inner { fill: var(--paper); stroke: none; }
+.flare-outer[data-cycle="markt"] { fill: var(--markt); }
+.flare-outer[data-cycle="staat"] { fill: var(--staat); }
+.flare-inner[data-cycle="markt"] { fill: var(--markt-light); }
+.flare-inner[data-cycle="staat"] { fill: var(--staat-light); }
+.flare-outer[data-cycle="ausland"] { fill: var(--ausland); }
+.flare-inner[data-cycle="ausland"] { fill: var(--ausland-light); }
+
+/* Chevron: Flussrichtung mittig in der Pipe. Hairline, leicht transparent. */
+.pipe-chevron {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.4;
+  stroke-linejoin: miter;
+  stroke-linecap: butt;
+  opacity: 0.6;
+}
+
+/* ---------- Haushalte-Container (transparent, nur Rand) ---------- */
+.container-box {
+  fill: none;
+  stroke: var(--ink-soft);
+  stroke-width: 1;
+}
+.container-label {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  fill: var(--ink-soft);
+}
+
+/* ---------- Knoten (gefüllt) ---------- */
+.node-box {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 1;
+}
+.node-label {
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 500;
+  fill: var(--ink);
+  letter-spacing: 0.01em;
+}
+
+/* ---------- Pipe-Labels ---------- */
+.pipe-name {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 14px;
+  fill: var(--ink);
+  paint-order: stroke;
+  stroke: var(--paper);
+  stroke-width: 4px;
+}
+.pipe-value {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  fill: var(--ink-soft);
+  paint-order: stroke;
+  stroke: var(--paper);
+  stroke-width: 3px;
+}
+.pipe-note {
+  font-family: var(--sans);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  fill: var(--ink-faint);
+  paint-order: stroke;
+  stroke: var(--paper);
+  stroke-width: 3px;
+}
+
+.footnote {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  fill: var(--ink-faint);
+}
+
+/* ---------- Interaktivität ---------- */
+/* Transitions für sanftes Ein-/Ausblenden */
+.pipe-outer, .pipe-inner, .pipe-chevron, .pipe-dashed,
+.flare-outer, .flare-inner,
+.node-box, .node-label, .container-box, .container-label,
+.pipe-label, .pipe-name, .pipe-value, .pipe-note {
+  transition: opacity 0.2s ease;
+}
+
+/* Dimmed-Zustand: alles außer dem Hover-Ziel wird transparent */
+.diagram.has-hover .pipe-outer,
+.diagram.has-hover .pipe-inner,
+.diagram.has-hover .pipe-chevron,
+.diagram.has-hover .pipe-dashed,
+.diagram.has-hover .flare-outer,
+.diagram.has-hover .flare-inner,
+.diagram.has-hover .node,
+.diagram.has-hover .pipe-label {
+  opacity: 0.15;
+}
+
+/* Hervorgehobene Elemente: volle Sichtbarkeit */
+.diagram.has-hover .pipe-outer.highlight,
+.diagram.has-hover .pipe-inner.highlight,
+.diagram.has-hover .pipe-chevron.highlight,
+.diagram.has-hover .pipe-dashed.highlight,
+.diagram.has-hover .flare-outer.highlight,
+.diagram.has-hover .flare-inner.highlight,
+.diagram.has-hover .node.highlight,
+.diagram.has-hover .pipe-label.highlight {
+  opacity: 1;
+}
+
+/* Cursor für interaktive Elemente */
+.node, [data-flow] {
+  cursor: pointer;
+}
+
+/* ---------- Annotations (nummerierte Kreise mit Popup) ---------- */
+.annotation-marker {
+  cursor: pointer;
+}
+.annotation-marker .annotation-circle {
+  transition: fill 0.15s ease;
+}
+.annotation-marker:hover .annotation-circle {
+  fill: var(--ink-soft);
+}
+
+/* Annotation-Pfeile */
+.annotation-arrow {
+  fill: none;
+  stroke: var(--ink-soft);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  marker-end: url(#annotation-arrowhead);
+}
+.annotation-circle {
+  fill: var(--ink);
+  stroke: var(--paper);
+  stroke-width: 2;
+}
+.annotation-number {
+  fill: var(--paper);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+/* Popup-Karte */
+.annotation-popup {
+  position: absolute;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  padding: 16px 20px;
+  max-width: 450px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.annotation-popup.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.annotation-popup-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.annotation-popup-number {
+  width: 24px;
+  height: 24px;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.annotation-popup-title {
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+.annotation-popup-text {
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  margin: 0;
+}
+.annotation-popup-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+}
+.annotation-popup-close:hover {
+  color: var(--ink);
+}
+.annotation-popup-images {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.annotation-popup-image {
+  max-width: 100%;
+  border-radius: 3px;
+  border: 1px solid var(--paper-edge);
+  display: block;
+  margin: 0 auto;
+}
+
+/* ---------- Fließende Chevron-Animation ---------- */
+/* Animierte Chevrons entlang der Pipe */
+.flow-chevron {
+  fill: none;
+  stroke-width: 1.4;
+  stroke-linejoin: miter;
+  stroke-linecap: butt;
+  opacity: 0;
+}
+.flow-chevron[data-cycle="markt"] { stroke: var(--markt); }
+.flow-chevron[data-cycle="staat"] { stroke: var(--staat); }
+.flow-chevron[data-cycle="ausland"] { stroke: var(--ausland); }
+
+/* Chevrons sichtbar bei Hover */
+.diagram.has-hover .flow-chevron.flowing {
+  opacity: 0.8;
+}
+
+/* Original-Chevron ausblenden bei Animation */
+.diagram.has-hover .pipe-chevron.highlight {
+  opacity: 0;
+}
